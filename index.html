@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>¿Posta? · Chequeá antes de compartir</title>
+<meta name="description" content="¿Te llegó una noticia, una placa o una captura? Pegala y te decimos si es real, cruzando fuentes oficiales, chequeadores y medios de distintas líneas.">
+<meta property="og:title" content="¿Posta? · Chequeá antes de compartir">
+<meta property="og:description" content="Verificador gratuito de noticias sobre política argentina: fuentes oficiales, chequeadores y medios de todas las líneas.">
+<meta name="theme-color" content="#f3efe6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%3F</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="logo" href="./">¿Posta<span>?</span></a>
+    <div class="cabecera-der">
+      <div id="fecha"></div>
+      <a href="metodologia.html">Cómo chequeamos</a>
+    </div>
+  </header>
+  <p class="bajada">Pegá el titular o subí la placa que te llegó. La chequeamos en fuentes oficiales, chequeadores y medios de distintas líneas.</p>
+
+  <form class="card" id="form">
+    <textarea id="texto" maxlength="3000" aria-label="Texto o titular a chequear" placeholder="Ej: «El Gobierno eliminó por decreto el feriado del 20 de noviembre»"></textarea>
+    <label class="drop" id="drop">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>
+      <span><b>Subí una imagen</b> (placa, captura de tuit, foto)<br>o pegala con Ctrl+V · en el celu, mantené apretado y Pegar</span>
+      <input type="file" id="archivo" accept="image/jpeg,image/png,image/webp" hidden>
+    </label>
+    <div class="preview" id="preview" hidden>
+      <img id="previewImg" alt="Imagen a chequear">
+      <button type="button" class="btn-x" id="quitar" aria-label="Quitar imagen">✕</button>
+    </div>
+    <div id="turnstile"></div>
+    <div class="acciones">
+      <span class="hint">Si ya fue chequeado, sale al instante. Si no, tarda unos 20 segundos.</span>
+      <button class="btn" id="enviar" type="submit">Chequear</button>
+    </div>
+  </form>
+
+  <div class="error" id="error" role="alert" hidden></div>
+
+  <div class="cargando" id="cargando" hidden>
+    <svg class="lupa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6" stroke-linecap="round"/></svg>
+    <div class="paso" id="paso">Leyendo el contenido…</div>
+    <div class="paso-sub">No cierres esta pestaña</div>
+  </div>
+
+  <section id="resultado" aria-live="polite" hidden></section>
+
+  <section id="portada">
+    <h2 class="seccion">Lo que se está chequeando esta semana</h2>
+    <ul class="lista" id="recientes"><li class="vacio">Cargando…</li></ul>
+  </section>
+
+  <footer>
+    <div>¿Posta? es una herramienta gratuita de verificación automática con inteligencia artificial. Puede equivocarse: por eso siempre mostramos las fuentes para que las revises vos, y podés reportar errores.</div>
+    <div>Lo que enviás se procesa con servicios de Google (Gemini) y Tavily. No guardamos tus imágenes ni tu texto original. No subas datos personales.</div>
+    <div><a href="metodologia.html">Metodología, fuentes y criterios</a></div>
+  </footer>
+</div>
+
+<script>
+// ================= Configuración =================
+// URL del Worker de Cloudflare (la da `npx wrangler deploy`).
+const API_BASE_PUBLICA = 'https://posta-api.laposta.workers.dev';
+// Clave pública ("site key") de Cloudflare Turnstile, el anti-robots gratis. Vacía = desactivado.
+const TURNSTILE_SITEKEY = '';
+// ==================================================
+
+// Solo para pruebas en tu compu: http://localhost:8000/?api=http://localhost:8787
+const API_BASE = (['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).get('api'))
+  || API_BASE_PUBLICA;
+
+const VEREDICTOS = {
+  VERDADERO:          { txt: 'Posta',          c: 'var(--verde)' },
+  FALSO:              { txt: 'Falso',          c: 'var(--rojo)' },
+  ENGANOSO:           { txt: 'Engañoso',       c: 'var(--ambar)' },
+  SIN_EVIDENCIA:      { txt: 'Sin evidencia',  c: 'var(--gris)' },
+  DEMASIADO_RECIENTE: { txt: 'Muy reciente',   c: 'var(--azul)' },
+  SATIRA:             { txt: 'Sátira',         c: 'var(--azul)' },
+  NO_VERIFICABLE:     { txt: 'No chequeable',  c: 'var(--gris)' },
+};
+const ESTADOS = {
+  confirmada:    { txt: 'Confirmado', c: 'var(--verde)' },
+  desmentida:    { txt: 'Falso',      c: 'var(--rojo)' },
+  enganosa:      { txt: 'Engañoso',   c: 'var(--ambar)' },
+  sin_evidencia: { txt: 'Sin datos',  c: 'var(--gris)' },
+};
+const POSTURAS = {
+  confirma:  { txt: 'Confirma',  c: 'var(--verde)' },
+  desmiente: { txt: 'Desmiente', c: 'var(--rojo)' },
+  contexto:  { txt: 'Contexto',  c: 'var(--gris)' },
+};
+const TIPOS = { primaria: 'Fuente oficial', chequeador: 'Chequeador', medio: 'Medio', otro: '' };
+const PASOS = [
+  'Leyendo el contenido…', 'Separando lo que se puede chequear…', 'Buscando en fuentes oficiales…',
+  'Consultando chequeadores…', 'Cruzando medios de distintas líneas…', 'Armando el veredicto…',
+];
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const mostrarEl = (id, si) => { $(id).hidden = !si; };
+let imagen = null, hashImagen = null, ultimoPedido = null, timerPasos = null;
+let tokenTurnstile = null, widgetTurnstile = null;
+
+$('fecha').textContent = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+// ---------- Anti-robots (Cloudflare Turnstile, gratis) ----------
+if (TURNSTILE_SITEKEY) {
+  window.onTurnstileLoad = () => {
+    widgetTurnstile = turnstile.render('#turnstile', {
+      sitekey: TURNSTILE_SITEKEY, appearance: 'interaction-only', language: 'es',
+      callback: t => { tokenTurnstile = t; },
+      'expired-callback': () => { tokenTurnstile = null; },
+    });
+  };
+  const s = document.createElement('script');
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad&render=explicit';
+  s.async = true; document.head.appendChild(s);
+}
+function renovarTurnstile() {
+  tokenTurnstile = null;
+  if (window.turnstile && widgetTurnstile !== null) turnstile.reset(widgetTurnstile);
+}
+
+// ---------- Imagen: subir, arrastrar o pegar ----------
+async function cargarImagen(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const img = await abrirImagen(file);
+  imagen = comprimir(img);
+  hashImagen = huella(img);
+  $('previewImg').src = `data:${imagen.mediaType};base64,${imagen.base64}`;
+  mostrarEl('preview', true); mostrarEl('drop', false);
+}
+
+function abrirImagen(file) {
+  return new Promise((ok, mal) => {
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(img.src); ok(img); };
+    img.onerror = () => mal(new Error('No se pudo abrir la imagen'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// Achica a 1600 px como máximo y pasa a JPEG: sube rápido y alcanza para leer el texto.
+function comprimir(img) {
+  const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(img, 0, 0, cv.width, cv.height);
+  return { base64: cv.toDataURL('image/jpeg', .85).split(',')[1], mediaType: 'image/jpeg' };
+}
+
+// Huella visual de 64 bits (dHash): la misma placa recomprimida por WhatsApp da casi la misma huella.
+// Así, si mil personas suben la misma placa, se chequea una sola vez.
+function huella(img) {
+  const cv = document.createElement('canvas'); cv.width = 9; cv.height = 8;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, 9, 8);
+  const d = ctx.getImageData(0, 0, 9, 8).data;
+  const gris = i => d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114;
+  let bits = '';
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    const i = (y * 9 + x) * 4;
+    bits += gris(i) > gris(i + 4) ? '1' : '0';
+  }
+  let hex = '';
+  for (let i = 0; i < 64; i += 4) hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
+  return hex;
+}
+
+$('archivo').addEventListener('change', e => cargarImagen(e.target.files[0]).catch(err => mostrarError(err.message)));
+$('quitar').addEventListener('click', () => {
+  imagen = null; hashImagen = null; $('archivo').value = '';
+  mostrarEl('preview', false); mostrarEl('drop', true);
+});
+['dragenter', 'dragover'].forEach(ev => $('drop').addEventListener(ev, e => { e.preventDefault(); $('drop').classList.add('activa'); }));
+['dragleave', 'drop'].forEach(ev => $('drop').addEventListener(ev, e => { e.preventDefault(); $('drop').classList.remove('activa'); }));
+$('drop').addEventListener('drop', e => cargarImagen(e.dataTransfer.files[0]).catch(err => mostrarError(err.message)));
+document.addEventListener('paste', e => {
+  const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+  if (item) { e.preventDefault(); cargarImagen(item.getAsFile()).catch(err => mostrarError(err.message)); }
+});
+
+// ---------- Enviar ----------
+function estadoCargando(si, rapido) {
+  mostrarEl('cargando', si);
+  $('enviar').disabled = si;
+  clearInterval(timerPasos);
+  if (si) {
+    let i = 0; $('paso').textContent = rapido || PASOS[0];
+    if (!rapido) timerPasos = setInterval(() => { i = Math.min(i + 1, PASOS.length - 1); $('paso').textContent = PASOS[i]; }, 3500);
+  }
+}
+
+function mostrarError(msg) {
+  $('error').textContent = msg || ''; mostrarEl('error', !!msg);
+}
+
+async function chequear(forzar) {
+  const texto = $('texto').value.trim();
+  if (!texto && !imagen) return mostrarError('Pegá un titular o subí una imagen para chequear.');
+  mostrarError(''); mostrarEl('resultado', false); estadoCargando(true);
+  ultimoPedido = { texto, imagen, hashImagen };
+  try {
+    const r = await fetch(`${API_BASE}/api/verificar`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto, imagen, hashImagen, forzar: !!forzar, turnstile: tokenTurnstile }),
+    });
+    const datos = await r.json().catch(() => ({ error: 'Respuesta inválida del servidor.' }));
+    if (!r.ok) throw new Error(datos.error || 'Algo falló.');
+    history.replaceState(null, '', `?id=${datos.id}`);
+    mostrar(datos);
+    cargarRecientes();
+  } catch (err) {
+    mostrarError(err.message === 'Failed to fetch' ? 'No se pudo conectar. Revisá tu conexión y probá de nuevo.' : err.message);
+  } finally {
+    estadoCargando(false);
+    renovarTurnstile();
+  }
+}
+$('form').addEventListener('submit', e => { e.preventDefault(); chequear(false); });
+
+// ---------- Mostrar resultado ----------
+function fechaCorta(iso) {
+  try { return new Date(iso).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+  catch { return ''; }
+}
+
+function mostrar(d) {
+  const v = VEREDICTOS[d.veredicto] || VEREDICTOS.SIN_EVIDENCIA;
+  const afirmaciones = (d.afirmaciones || []).map(a => {
+    const e = ESTADOS[a.estado] || ESTADOS.sin_evidencia;
+    return `<li class="card item" style="--c:${e.c}"><span class="chip">${e.txt}</span>
+      <div><b>${esc(a.texto)}</b>${a.explicacion ? `<p>${esc(a.explicacion)}</p>` : ''}</div></li>`;
+  }).join('');
+  const senales = (d.senales_imagen || []).map(s => `<li class="card item"><span aria-hidden="true">🔍</span><div>${esc(s)}</div></li>`).join('');
+  const fuentes = (d.fuentes || []).map(f => {
+    const p = POSTURAS[f.postura] || POSTURAS.contexto;
+    return `<li class="card item fuente" style="--c:${p.c}"><span class="chip">${p.txt}</span>
+      <div><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.titulo || f.medio)}</a>
+      <div class="meta">${esc(f.medio)}${TIPOS[f.tipo] ? ' · ' + TIPOS[f.tipo] : ''}${f.fecha ? ' · ' + esc(String(f.fecha).slice(0, 16)) : ''}</div></div></li>`;
+  }).join('');
+
+  const avisoCache = d.desdeCache ? `
+    <div class="card aviso-cache">
+      <span><b>Esto ya estaba chequeado</b> el ${esc(fechaCorta(d.creado))} · ${d.consultas} ${d.consultas === 1 ? 'consulta' : 'consultas'}</span>
+      ${ultimoPedido ? '<button class="btn-sec" id="forzar">No es lo que me llegó, chequear de nuevo</button>' : ''}
+    </div>` : '';
+
+  const sinFuentes = d.veredicto === 'NO_VERIFICABLE' ? '' : `<h3>Fuentes</h3><p class="hint">No encontramos fuentes de la lista que hablen de esto.</p>`;
+
+  $('resultado').innerHTML = `
+    ${avisoCache}
+    <div class="card veredicto" style="--c:${v.c}">
+      <span class="sello">${v.txt}</span>
+      ${d.titular_analizado ? `<p class="titular">«${esc(d.titular_analizado)}»</p>` : ''}
+      <p class="resumen">${esc(d.resumen)}</p>
+      ${d.veredicto !== 'NO_VERIFICABLE' ? `<div class="confianza">Confianza <div class="barra"><i id="barra"></i></div> ${Number(d.confianza) || 0}%</div>` : ''}
+      ${d.que_hacer ? `<div class="que-hacer">${esc(d.que_hacer)}</div>` : ''}
+    </div>
+    ${(d.afirmaciones || []).length > 1 ? `<h3>Punto por punto</h3><ul class="lista">${afirmaciones}</ul>` : ''}
+    ${senales ? `<h3>Sobre la imagen</h3><ul class="lista">${senales}</ul>` : ''}
+    ${fuentes ? `<h3>Fuentes consultadas</h3><ul class="lista">${fuentes}</ul>` : sinFuentes}
+    <div class="compartir">
+      <button class="btn-sec" id="compartirWa">Compartir por WhatsApp</button>
+      <button class="btn-sec" id="copiar">Copiar link</button>
+      <button class="btn-sec" id="reportar">Reportar un error</button>
+      <button class="btn-sec" id="otro">Chequear otra</button>
+    </div>
+    <form class="card reporte" id="formReporte" hidden>
+      <label for="motivo" class="hint">¿Qué está mal? Si tenés una fuente que lo contradiga, pegá el link.</label>
+      <textarea id="motivo" maxlength="1000" required></textarea>
+      <div class="acciones"><span></span><button class="btn" type="submit">Enviar reporte</button></div>
+      <div id="reporteMsg"></div>
+    </form>
+    <p class="nota">Verificación automática con IA. Revisá las fuentes antes de sacar conclusiones.</p>`;
+  mostrarEl('resultado', true);
+  setTimeout(() => { const b = $('barra'); if (b) b.style.width = (Number(d.confianza) || 0) + '%'; }, 60);
+  $('resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const link = `${location.origin}${location.pathname}?id=${d.id}`;
+  $('compartirWa').onclick = () => {
+    const msg = `${v.txt.toUpperCase()}: «${d.titular_analizado || ''}»\n${d.resumen}\n\nChequeo completo: ${link}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+  };
+  $('copiar').onclick = async () => {
+    try { await navigator.clipboard.writeText(link); $('copiar').textContent = '¡Copiado!'; } catch { prompt('Copiá este link:', link); }
+  };
+  $('reportar').onclick = () => { mostrarEl('formReporte', true); $('motivo').focus(); };
+  $('formReporte').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      const r = await fetch(`${API_BASE}/api/reporte`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: d.id, motivo: $('motivo').value }),
+      });
+      const x = await r.json();
+      if (!r.ok) throw new Error(x.error);
+      $('formReporte').innerHTML = '<div class="ok">¡Gracias! Lo vamos a revisar.</div>';
+    } catch (err) {
+      $('reporteMsg').innerHTML = `<div class="error">${esc(err.message || 'No se pudo enviar.')}</div>`;
+    }
+  };
+  $('otro').onclick = () => {
+    mostrarEl('resultado', false); $('texto').value = ''; $('quitar').click(); ultimoPedido = null;
+    history.replaceState(null, '', location.pathname); window.scrollTo({ top: 0, behavior: 'smooth' }); $('texto').focus();
+  };
+  if ($('forzar')) $('forzar').onclick = () => {
+    $('texto').value = ultimoPedido.texto || '';
+    imagen = ultimoPedido.imagen; hashImagen = ultimoPedido.hashImagen;
+    chequear(true);
+  };
+}
+
+// ---------- Portada ----------
+async function cargarRecientes() {
+  try {
+    const r = await fetch(`${API_BASE}/api/recientes`);
+    const { recientes } = await r.json();
+    $('recientes').innerHTML = recientes.length ? recientes.map(x => {
+      const v = VEREDICTOS[x.veredicto] || VEREDICTOS.SIN_EVIDENCIA;
+      return `<li><a class="card reciente" href="?id=${encodeURIComponent(x.id)}" data-id="${esc(x.id)}" style="--c:${v.c}">
+        <span class="chip">${v.txt}</span>
+        <div><div class="t">${esc(x.titular)}</div>
+        <div class="meta">${x.consultas} ${x.consultas === 1 ? 'consulta' : 'consultas'} · ${esc(fechaCorta(x.creado))}</div></div></a></li>`;
+    }).join('') : '<li class="vacio">Todavía no hay chequeos esta semana. ¡Sé el primero!</li>';
+    document.querySelectorAll('.reciente').forEach(a => a.addEventListener('click', e => {
+      e.preventDefault(); history.replaceState(null, '', `?id=${a.dataset.id}`); abrirChequeo(a.dataset.id);
+    }));
+  } catch {
+    $('recientes').innerHTML = '<li class="vacio">No se pudo cargar la lista.</li>';
+  }
+}
+
+async function abrirChequeo(id) {
+  mostrarError(''); ultimoPedido = null; estadoCargando(true, 'Abriendo el chequeo…');
+  try {
+    const r = await fetch(`${API_BASE}/api/chequeo?id=${encodeURIComponent(id)}`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    mostrar(d);
+  } catch (e) {
+    mostrarError(e.message || 'No encontramos ese chequeo.');
+  } finally {
+    estadoCargando(false);
+  }
+}
+
+const idInicial = new URLSearchParams(location.search).get('id');
+if (idInicial) abrirChequeo(idInicial);
+cargarRecientes();
+</script>
+</body>
+</html>

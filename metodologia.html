@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cómo chequeamos · ¿Posta?</title>
+<meta name="description" content="Metodología, fuentes y criterios de ¿Posta?, el verificador gratuito de noticias sobre política argentina.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%3F</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<div class="wrap prosa">
+  <header>
+    <a class="logo" href="./">¿Posta<span>?</span></a>
+    <div class="cabecera-der"><a href="./">Chequear algo</a></div>
+  </header>
+
+  <p class="bajada">Cómo funciona, qué fuentes usamos y qué significa cada veredicto. Lo publicamos para que puedas juzgar la herramienta vos mismo.</p>
+
+  <h2>Qué es</h2>
+  <p>¿Posta? es una herramienta gratuita y automática para chequear noticias, titulares, placas y capturas que circulan sobre política argentina. No la hace una persona: la hace un sistema de inteligencia artificial que busca en fuentes confiables y cruza lo que encuentra. <b>Puede equivocarse</b>, y por eso siempre te mostramos las fuentes para que las revises.</p>
+  <p>No pertenece a ningún partido, medio ni gobierno.</p>
+
+  <h2>Cómo chequeamos</h2>
+  <div class="cols">
+    <div class="card"><b>1. Entender</b>Leemos el texto o la imagen y separamos las afirmaciones concretas: quién dijo o hizo qué, cuándo y dónde. Si es una placa, anotamos a qué medio dice pertenecer.</div>
+    <div class="card"><b>2. Buscar</b>Buscamos <i>solamente</i> en la lista de fuentes de abajo: organismos oficiales primero, después chequeadores y medios de distintas líneas editoriales.</div>
+    <div class="card"><b>3. Cruzar</b>Comparamos lo que dicen las fuentes. Si medios de líneas opuestas coinciden, la confianza sube. Si solo lo dice un lado, lo aclaramos.</div>
+    <div class="card"><b>4. Mostrar</b>Damos un veredicto con su nivel de confianza y los links a cada fuente. Cada fuente es un resultado real de la búsqueda: el sistema no puede inventar links.</div>
+  </div>
+
+  <h2>Qué significa cada veredicto</h2>
+  <table>
+    <tr><td><span class="chip" style="--c:var(--verde)">Posta</span></td><td>Lo confirma una fuente oficial o varias fuentes independientes.</td></tr>
+    <tr><td><span class="chip" style="--c:var(--rojo)">Falso</span></td><td>Lo desmiente una fuente oficial o un chequeador, o el medio al que se le atribuye nunca lo publicó.</td></tr>
+    <tr><td><span class="chip" style="--c:var(--ambar)">Engañoso</span></td><td>Tiene una base real, pero está exagerado, sacado de contexto, es de otra fecha o mezcla datos.</td></tr>
+    <tr><td><span class="chip" style="--c:var(--gris)">Sin evidencia</span></td><td>No encontramos nada que lo confirme ni lo desmienta. <b>No quiere decir que sea falso.</b></td></tr>
+    <tr><td><span class="chip" style="--c:var(--azul)">Muy reciente</span></td><td>Parece ser de las últimas horas y todavía no hay cobertura. Volvé a chequearlo más tarde.</td></tr>
+    <tr><td><span class="chip" style="--c:var(--azul)">Sátira</span></td><td>Viene de un sitio o cuenta de humor.</td></tr>
+    <tr><td><span class="chip" style="--c:var(--gris)">No chequeable</span></td><td>Es una opinión o no tiene afirmaciones concretas que se puedan comprobar con datos.</td></tr>
+  </table>
+
+  <h2>Fuentes que consultamos</h2>
+  <p><b>Fuentes oficiales:</b> Boletín Oficial, argentina.gob.ar, Casa Rosada, Cámara de Diputados, Senado, INDEC, Banco Central, Centro de Información Judicial, Cámara Nacional Electoral, y los gobiernos de la Provincia de Buenos Aires, Córdoba y la Ciudad de Buenos Aires.</p>
+  <p><b>Chequeadores profesionales:</b> Chequeado, AFP Factual y Reuters.</p>
+  <p><b>Medios de distintas líneas editoriales:</b> La Nación, Clarín, Infobae, Perfil, TN, La Política Online, Ámbito, El Cronista, Página/12, El Destape, elDiarioAR, C5N, Letra P, La Voz del Interior, Los Andes, La Capital, El País y BBC.</p>
+  <p>La lista busca equilibrio entre medios de distintas orientaciones. Si creés que falta alguno o que hay un desbalance, avisanos.</p>
+
+  <h2>Límites que tenés que conocer</h2>
+  <ul>
+    <li>La inteligencia artificial puede interpretar mal una fuente o una imagen. <b>Revisá siempre los links.</b></li>
+    <li>Si algo pasó hace minutos, probablemente no haya cobertura todavía.</li>
+    <li>Podemos decir si una placa coincide con lo que publicó un medio, pero no podemos garantizar si una foto fue editada o generada con IA: lo que mostramos sobre imágenes son indicios.</li>
+    <li>Hablamos de hechos, nunca de personas: decimos "no hay registro de que haya dicho eso", no "miente".</li>
+    <li>Si lo que subís ya fue chequeado por otra persona, te mostramos ese chequeo al instante. Si no corresponde a lo que te llegó, podés pedir uno nuevo.</li>
+  </ul>
+
+  <h2>Privacidad</h2>
+  <p>No guardamos las imágenes que subís ni el texto original que pegás: solo una huella para reconocer si alguien más ya lo chequeó, y el resultado del chequeo. Para analizar el contenido usamos servicios de terceros (Google Gemini y Tavily), así que no subas datos personales ni información privada.</p>
+
+  <h2>Errores y correcciones</h2>
+  <p>Cada chequeo tiene un botón de <b>"Reportar un error"</b>. Revisamos los reportes y, si corresponde, corregimos o sacamos el chequeo de la portada.</p>
+
+  <footer>
+    <div><a href="./">Volver a ¿Posta?</a></div>
+  </footer>
+</div>
+</body>
+</html>
