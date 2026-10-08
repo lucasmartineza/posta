@@ -27,7 +27,7 @@
   <p class="bajada">Pegá el titular o subí la placa que te llegó. La chequeamos en fuentes oficiales, chequeadores y medios de distintas líneas.</p>
 
   <form class="card" id="form">
-    <textarea id="texto" maxlength="3000" aria-label="Texto o titular a chequear" placeholder="Ej: «El Gobierno eliminó por decreto el feriado del 20 de noviembre»"></textarea>
+    <textarea id="texto" maxlength="3000" aria-label="Texto o titular a chequear" placeholder="Pegá un titular, una frase o hacé una pregunta. Ej: «Kicillof dijo que…» o «¿Estamos mejor que en 2023?»"></textarea>
     <label class="drop" id="drop">
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>
       <span><b>Subí una imagen</b> (placa, captura de tuit, foto)<br>o pegala con Ctrl+V · en el celu, mantené apretado y Pegar</span>
@@ -86,6 +86,13 @@ const VEREDICTOS = {
   DEMASIADO_RECIENTE: { txt: 'Muy reciente',   c: 'var(--azul)' },
   SATIRA:             { txt: 'Sátira',         c: 'var(--azul)' },
   NO_VERIFICABLE:     { txt: 'No chequeable',  c: 'var(--gris)' },
+  TABLERO:            { txt: 'Los datos',      c: 'var(--tinta)' },
+};
+const TENDENCIAS = {
+  mejoro:   { txt: 'Mejoró',   flecha: '▲', c: 'var(--verde)' },
+  empeoro:  { txt: 'Empeoró',  flecha: '▼', c: 'var(--rojo)' },
+  igual:    { txt: 'Igual',    flecha: '＝', c: 'var(--gris)' },
+  sin_dato: { txt: 'Sin dato', flecha: '·', c: 'var(--gris)' },
 };
 const ESTADOS = {
   confirmada:    { txt: 'Confirmado', c: 'var(--verde)' },
@@ -98,7 +105,7 @@ const POSTURAS = {
   desmiente: { txt: 'Desmiente', c: 'var(--rojo)' },
   contexto:  { txt: 'Contexto',  c: 'var(--gris)' },
 };
-const TIPOS = { primaria: 'Fuente oficial', chequeador: 'Chequeador', medio: 'Medio', otro: '' };
+const TIPOS = { primaria: 'Fuente oficial', datos: 'Centro de estudios', chequeador: 'Chequeador', medio: 'Medio', otro: '' };
 const PASOS = [
   'Leyendo el contenido…', 'Separando lo que se puede chequear…', 'Buscando en fuentes oficiales…',
   'Consultando chequeadores…', 'Cruzando medios de distintas líneas…', 'Armando el veredicto…',
@@ -257,21 +264,52 @@ function mostrar(d) {
       ${ultimoPedido ? '<button class="btn-sec" id="forzar">No es lo que me llegó, chequear de nuevo</button>' : ''}
     </div>` : '';
 
-  const sinFuentes = d.veredicto === 'NO_VERIFICABLE' ? '' : `<h3>Fuentes</h3><p class="hint">No encontramos fuentes de la lista que hablen de esto.</p>`;
+  const sinFuentes = ['NO_VERIFICABLE', 'TABLERO'].includes(d.veredicto) ? '' : `<h3>Fuentes</h3><p class="hint">No encontramos fuentes de la lista que hablen de esto.</p>`;
+  const esTablero = d.veredicto === 'TABLERO';
+  const alerta = d.veredicto === 'FALSO' || d.veredicto === 'ENGANOSO';
+  const banda = d.veredicto === 'FALSO'
+    ? `<div class="banda" style="--c:${v.c}">ESTO ES FALSO <small>No lo compartas</small></div>`
+    : d.veredicto === 'ENGANOSO'
+      ? `<div class="banda" style="--c:${v.c}">ESTO ES ENGAÑOSO <small>Compartilo solo con contexto</small></div>` : '';
+  const comoEngana = alerta && (d.como_engana || d.truco_nombre)
+    ? `<div class="como-engana"><b>Cómo engaña${d.truco_nombre ? ' · ' + esc(d.truco_nombre) : ''}</b>${esc(d.como_engana)}</div>` : '';
+  const b = d.balance || {};
+  const balanceHtml = esTablero ? `<div class="balance">
+      <span style="--c:var(--verde)">▲ Mejoraron ${b.mejoro || 0}</span>
+      <span style="--c:var(--rojo)">▼ Empeoraron ${b.empeoro || 0}</span>
+      ${b.igual ? `<span style="--c:var(--gris)">＝ Igual ${b.igual}</span>` : ''}
+      ${b.sin_dato ? `<span style="--c:var(--gris)">· Sin dato ${b.sin_dato}</span>` : ''}
+    </div>` : '';
+  const tablaHtml = esTablero ? `
+    <h3>Indicador por indicador${d.periodo?.antes ? ` · ${esc(d.periodo.antes)} → ${esc(d.periodo.ahora || 'hoy')}` : ''}</h3>
+    <table class="tabla-ind"><tbody>${(d.indicadores || []).map(i => {
+      const t = TENDENCIAS[i.tendencia] || TENDENCIAS.sin_dato;
+      return `<tr style="--c:${t.c}">
+        <td class="c-nom"><div class="nom">${esc(i.nombre)}</div>${i.explicacion ? `<div class="exp">${esc(i.explicacion)}</div>` : ''}
+          ${i.fuente ? `<div class="src"><a href="${esc(i.fuente.url)}" target="_blank" rel="noopener">${esc(i.fuente.medio)}</a></div>` : ''}</td>
+        <td class="c-val"><div class="valores">${i.antes || i.ahora ? `${esc(i.antes || '¿?')} → ${esc(i.ahora || '¿?')}` : '—'}</div><div class="exp">${t.txt}</div></td>
+        <td class="flecha" aria-label="${t.txt}">${t.flecha}</td></tr>`;
+    }).join('')}</tbody></table>
+    ${d.advertencias ? `<p class="hint">⚠️ ${esc(d.advertencias)}</p>` : ''}` : '';
 
   $('resultado').innerHTML = `
     ${avisoCache}
-    <div class="card veredicto" style="--c:${v.c}">
-      <span class="sello">${v.txt}</span>
+    ${banda}
+    <div class="card veredicto${alerta ? ' alerta' : ''}" style="--c:${v.c}">
+      ${banda ? '' : `<span class="sello">${v.txt}</span>`}
       ${d.titular_analizado ? `<p class="titular">«${esc(d.titular_analizado)}»</p>` : ''}
       <p class="resumen">${esc(d.resumen)}</p>
-      ${d.veredicto !== 'NO_VERIFICABLE' ? `<div class="confianza">Confianza <div class="barra"><i id="barra"></i></div> ${Number(d.confianza) || 0}%</div>` : ''}
+      ${balanceHtml}
+      ${comoEngana}
+      ${!['NO_VERIFICABLE', 'TABLERO'].includes(d.veredicto) ? `<div class="confianza">Solidez de las pruebas <div class="barra"><i id="barra"></i></div> ${Number(d.confianza) || 0}%</div>` : ''}
       ${d.que_hacer ? `<div class="que-hacer">${esc(d.que_hacer)}</div>` : ''}
     </div>
+    ${tablaHtml}
     ${(d.afirmaciones || []).length > 1 ? `<h3>Punto por punto</h3><ul class="lista">${afirmaciones}</ul>` : ''}
     ${senales ? `<h3>Sobre la imagen</h3><ul class="lista">${senales}</ul>` : ''}
-    ${fuentes ? `<h3>Fuentes consultadas</h3><ul class="lista">${fuentes}</ul>` : sinFuentes}
+    ${fuentes && !esTablero ? `<h3>Fuentes consultadas</h3><ul class="lista">${fuentes}</ul>` : sinFuentes}
     <div class="compartir">
+      <button class="btn${alerta ? '' : '-sec'}" id="compartirImg">${alerta ? `Compartir "${v.txt.toUpperCase()}" como imagen` : 'Compartir como imagen'}</button>
       <button class="btn-sec" id="compartirWa">Compartir por WhatsApp</button>
       <button class="btn-sec" id="copiar">Copiar link</button>
       <button class="btn-sec" id="reportar">Reportar un error</button>
@@ -290,9 +328,12 @@ function mostrar(d) {
 
   const link = `${location.origin}${location.pathname}?id=${d.id}`;
   $('compartirWa').onclick = () => {
-    const msg = `${v.txt.toUpperCase()}: «${d.titular_analizado || ''}»\n${d.resumen}\n\nChequeo completo: ${link}`;
+    const enc = d.veredicto === 'FALSO' ? '❌ ESTO ES FALSO' : d.veredicto === 'ENGANOSO' ? '⚠️ ESTO ES ENGAÑOSO'
+      : d.veredicto === 'TABLERO' ? `📊 LOS DATOS: ▲ ${b.mejoro || 0} mejoraron · ▼ ${b.empeoro || 0} empeoraron` : v.txt.toUpperCase();
+    const msg = `${enc}\n«${d.titular_analizado || ''}»\n\n${d.resumen}\n\nChequeo completo: ${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
   };
+  $('compartirImg').onclick = () => compartirImagen(d, v, link);
   $('copiar').onclick = async () => {
     try { await navigator.clipboard.writeText(link); $('copiar').textContent = '¡Copiado!'; } catch { prompt('Copiá este link:', link); }
   };
@@ -322,6 +363,92 @@ function mostrar(d) {
   };
 }
 
+// ---------- Imagen para compartir (WhatsApp, Instagram, etc.) ----------
+function partirLineas(ctx, texto, ancho, maxLineas) {
+  const palabras = String(texto || '').split(/\s+/);
+  const lineas = [];
+  let actual = '';
+  for (const p of palabras) {
+    const prueba = actual ? actual + ' ' + p : p;
+    if (ctx.measureText(prueba).width > ancho && actual) { lineas.push(actual); actual = p; }
+    else actual = prueba;
+  }
+  if (actual) lineas.push(actual);
+  if (lineas.length > maxLineas) { lineas.length = maxLineas; lineas[maxLineas - 1] = lineas[maxLineas - 1].replace(/\s*\S*$/, '…'); }
+  return lineas;
+}
+
+async function compartirImagen(d, v, link) {
+  try { await document.fonts.ready; } catch {}
+  const W = 1080, H = 1350, M = 80;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const color = { FALSO: '#c8321e', ENGANOSO: '#b7790f', VERDADERO: '#1f7a45' }[d.veredicto] || '#1b1915';
+  const serif = '"Fraunces", Georgia, serif', sans = '"Inter", system-ui, sans-serif', mono = '"JetBrains Mono", monospace';
+
+  ctx.fillStyle = '#f3efe6'; ctx.fillRect(0, 0, W, H);
+  // Encabezado
+  ctx.fillStyle = '#1b1915'; ctx.font = `800 64px ${serif}`; ctx.fillText('¿Posta', M, 130);
+  const wPosta = ctx.measureText('¿Posta').width;
+  ctx.fillStyle = '#c8321e'; ctx.fillText('?', M + wPosta, 130);
+  ctx.fillStyle = '#1b1915'; ctx.fillRect(M, 160, W - 2 * M, 4); ctx.fillRect(M, 170, W - 2 * M, 2);
+
+  // Banda del veredicto
+  const textoBanda = d.veredicto === 'FALSO' ? 'ESTO ES FALSO' : d.veredicto === 'ENGANOSO' ? 'ESTO ES ENGAÑOSO'
+    : d.veredicto === 'TABLERO' ? 'LO QUE DICEN LOS DATOS' : v.txt.toUpperCase();
+  ctx.fillStyle = color; ctx.fillRect(M, 220, W - 2 * M, 150);
+  ctx.fillStyle = '#fff'; ctx.font = `800 ${textoBanda.length > 16 ? 64 : 84}px ${serif}`;
+  ctx.fillText(textoBanda, M + 40, 325);
+
+  // Titular
+  let y = 470;
+  ctx.fillStyle = '#1b1915'; ctx.font = `500 50px ${serif}`;
+  for (const l of partirLineas(ctx, `«${d.titular_analizado || ''}»`, W - 2 * M, 4)) { ctx.fillText(l, M, y); y += 64; }
+
+  // Balance del tablero o resumen
+  y += 30;
+  if (d.veredicto === 'TABLERO' && d.balance) {
+    ctx.font = `700 46px ${mono}`;
+    ctx.fillStyle = '#1f7a45'; ctx.fillText(`▲ Mejoraron ${d.balance.mejoro || 0}`, M, y); y += 70;
+    ctx.fillStyle = '#c8321e'; ctx.fillText(`▼ Empeoraron ${d.balance.empeoro || 0}`, M, y); y += 70;
+    ctx.font = `400 34px ${sans}`; ctx.fillStyle = '#5d574b';
+    for (const i of (d.indicadores || []).slice(0, 4)) {
+      const t = TENDENCIAS[i.tendencia] || TENDENCIAS.sin_dato;
+      ctx.fillStyle = { mejoro: '#1f7a45', empeoro: '#c8321e' }[i.tendencia] || '#8a8476';
+      ctx.fillText(t.flecha, M, y);
+      ctx.fillStyle = '#3a362e';
+      ctx.fillText(`${i.nombre}${i.antes || i.ahora ? `: ${i.antes || '¿?'} → ${i.ahora || '¿?'}` : ': sin dato'}`.slice(0, 56), M + 44, y); y += 50;
+    }
+  } else {
+    ctx.font = `400 36px ${sans}`; ctx.fillStyle = '#3a362e';
+    for (const l of partirLineas(ctx, d.resumen, W - 2 * M, d.como_engana ? 5 : 8)) { ctx.fillText(l, M, y); y += 50; }
+    if (d.como_engana && y < H - 380) {
+      y += 30;
+      ctx.fillStyle = color; ctx.fillRect(M, y - 34, 8, 8 + 50 * Math.min(4, partirLineas(ctx, d.como_engana, W - 2 * M - 40, 4).length) + 40);
+      ctx.font = `700 28px ${mono}`;
+      ctx.fillText(`CÓMO ENGAÑA${d.truco_nombre ? ' · ' + d.truco_nombre.toUpperCase() : ''}`, M + 32, y);
+      y += 52; ctx.font = `400 34px ${sans}`; ctx.fillStyle = '#3a362e';
+      for (const l of partirLineas(ctx, d.como_engana, W - 2 * M - 40, 4)) { ctx.fillText(l, M + 32, y); y += 48; }
+    }
+  }
+
+  // Pie
+  ctx.fillStyle = '#d6cebd'; ctx.fillRect(M, H - 190, W - 2 * M, 2);
+  ctx.fillStyle = '#5d574b'; ctx.font = `500 30px ${sans}`;
+  ctx.fillText('Chequeado con fuentes oficiales y medios de todas las líneas.', M, H - 135);
+  ctx.fillStyle = '#1b1915'; ctx.font = `700 32px ${mono}`;
+  ctx.fillText(link.replace(/^https?:\/\//, '').slice(0, 52), M, H - 85);
+
+  const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+  const archivo = new File([blob], `posta-${d.id}.png`, { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+    try { await navigator.share({ files: [archivo], text: `Chequeo completo: ${link}` }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = archivo.name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
 // ---------- Portada ----------
 async function cargarRecientes() {
   try {
@@ -331,7 +458,7 @@ async function cargarRecientes() {
       const v = VEREDICTOS[x.veredicto] || VEREDICTOS.SIN_EVIDENCIA;
       return `<li><a class="card reciente" href="?id=${encodeURIComponent(x.id)}" data-id="${esc(x.id)}" style="--c:${v.c}">
         <span class="chip">${v.txt}</span>
-        <div><div class="t">${esc(x.titular)}</div>
+        <div>${x.destacado ? '<div class="destacado-pin">📌 Destacado</div>' : ''}<div class="t">${esc(x.titular)}</div>
         <div class="meta">${x.consultas} ${x.consultas === 1 ? 'consulta' : 'consultas'} · ${esc(fechaCorta(x.creado))}</div></div></a></li>`;
     }).join('') : '<li class="vacio">Todavía no hay chequeos esta semana. ¡Sé el primero!</li>';
     document.querySelectorAll('.reciente').forEach(a => a.addEventListener('click', e => {
